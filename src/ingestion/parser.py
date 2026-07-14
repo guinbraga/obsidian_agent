@@ -36,4 +36,11 @@ def parse_textbook(file_path: str) -> list[Document]:
         chunk_size=1500, chunk_overlap=150, separators=["\n\n", "\n", " ", ""]
     )
     final_chunks = recursive_splitter.split_documents(document_chunks)
+
+    import os
+    source_filename = os.path.basename(file_path)
+    for chunk in final_chunks:
+        chunk.metadata["source"] = source_filename
+
     return final_chunks
+

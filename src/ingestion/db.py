@@ -1,8 +1,11 @@
 import os
+import json
+import uuid
 from contextlib import contextmanager
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.dialects.postgresql import insert
 
 from src.ingestion.models import Base, DocumentChunk
 
@@ -36,16 +39,33 @@ def init_db():
     Base.metadata.create_all(engine)
 
 
-def insert_chunks(chunks, vectors):
-    with get_session() as session:
-        chunks_to_insert = []
-        for chunk, vector in zip(chunks, vectors):
-            new_row = DocumentChunk(
-                content=chunk.page_content,
-                metadata_=chunk.metadata,
-                embedding=vector,
-            )
-            chunks_to_insert.append(new_row)
+# A unique UUID namespace for document chunks to ensure consistent uuid.uuid5 generation.
+CHUNK_NAMESPACE = uuid.UUID("f3ab9292-628d-4be9-b4b6-7ebce2cf8608")
 
-        session.add_all(chunks_to_insert)
-        print(f"Inserted {len(chunks_to_insert)} chunks into pgvector.")
+
+def generate_chunk_id(content: str, metadata: dict) -> uuid.UUID:
+    # Serialize metadata with sorted keys for determinism
+    metadata_str = json.dumps(metadata, sort_keys=True)
+    unique_str = f"{metadata_str}:{content}"
+    return uuid.uuid5(CHUNK_NAMESPACE, unique_str)
+
+
+def insert_chunks(chunks, vectors):
+    if not chunks:
+        return
+
+    data_to_insert = []
+    for chunk, vector in zip(chunks, vectors):
+        chunk_id = generate_chunk_id(chunk.page_content, chunk.metadata)
+        data_to_insert.append({
+            "id": chunk_id,
+            "content": chunk.page_content,
+            "metadata_": chunk.metadata,
+            "embedding": vector,
+        })
+
+    with get_session() as session:
+        stmt = insert(DocumentChunk).values(data_to_insert)
+        stmt = stmt.on_conflict_do_nothing(index_elements=["id"])
+        session.execute(stmt)
+        print(f"Processed {len(data_to_insert)} chunks (skipped duplicates) in pgvector.")
