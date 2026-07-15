@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 6: Building the CLI Application</title>
+    <link rel="stylesheet" href="../assets/style.css">
+    <!-- Highlight.js for syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</head>
+<body>
+    <header>
+        <p class="meta">OBSIDIAN AGENT COURSE &bull; LESSON 6</p>
+        <h1>Building the CLI Application</h1>
+    </header>
+
+    <main>
+        <section>
+            <p>Excellent choice! Turning a collection of scripts into a unified CLI (Command Line Interface) application is the hallmark of a mature project. It makes your tools vastly easier to use.</p>
+            <p>In this lesson, we will use Python's built-in <code>argparse</code> module to create a single entrypoint (<code>cli.py</code>) that can route commands to either your LangGraph agent or your ingestion pipeline.</p>
+        </section>
+
+        <section>
+            <h2>Step 1: Refactoring the Agent Script</h2>
+            <p>Currently, your <code>run_react_agent.py</code> script runs the graph stream directly in its <code>if __name__ == "__main__":</code> block. To use it in a CLI, we need to wrap that execution in a callable function.</p>
+            <ol>
+                <li>Open <code>run_react_agent.py</code>.</li>
+                <li>Above the <code>if __name__ == "__main__":</code> block, add a new function:
+<pre><code class="language-python">def run_agent(query: str):
+    """Executes the agent graph with the given query and prints the output."""
+    print(f"Asking Agent: '{query}'\n")
+    events = graph.stream({"messages": [{"role": "user", "content": query}]})
+    for event in events:
+        for node_name, state in event.items():
+            print(f"\n=== Node Completed: {node_name} ===")
+            if "messages" in state:
+                last_msg = state["messages"][-1]
+                content = last_msg.content if last_msg.content else str(last_msg.tool_calls)
+                print(f"[{last_msg.type.upper()}]: {content[:500]}")
+</code></pre>
+                </li>
+                <li>(Optional) You can now replace the contents of your <code>if __name__ == "__main__":</code> block with just a call to <code>run_agent("Your test query")</code>.</li>
+            </ol>
+        </section>
+
+        <section>
+            <h2>Step 2: Introduction to <code>argparse</code> Subparsers</h2>
+            <p><code>argparse</code> is incredibly powerful. When you have multiple commands (like <code>git commit</code> vs <code>git push</code>), you use <strong>subparsers</strong>. Here, we want two commands:</p>
+            <ul>
+                <li><code>python cli.py ask "My question"</code></li>
+                <li><code>python cli.py ingest data/my_file.pdf</code></li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>Step 3: Creating <code>cli.py</code></h2>
+            <p>Create a new file in your project root named <code>cli.py</code>. This will be the brain of your command line interface. Paste the following code:</p>
+
+<pre><code class="language-python">import argparse
+import sys
+
+# Import our underlying functions
+from run_react_agent import run_agent
+from src.ingestion.pipeline import run_pipeline
+
+def main():
+    # 1. Create the top-level parser
+    parser = argparse.ArgumentParser(description="Obsidian Agent CLI")
+    
+    # 2. Create subparsers for the commands
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    subparsers.required = True # Force the user to choose a command
+    
+    # 3. 'ask' command
+    ask_parser = subparsers.add_parser("ask", help="Ask the agent a question")
+    ask_parser.add_argument("query", type=str, help="The prompt to send to the agent")
+    
+    # 4. 'ingest' command
+    ingest_parser = subparsers.add_parser("ingest", help="Ingest a new document into pgvector")
+    ingest_parser.add_argument("filepath", type=str, help="Path to the PDF or Markdown file")
+    
+    # Parse the arguments
+    args = parser.parse_args()
+    
+    # Route execution based on the chosen command
+    if args.command == "ask":
+        run_agent(args.query)
+    elif args.command == "ingest":
+        print(f"Starting ingestion for: {args.filepath}")
+        run_pipeline(args.filepath)
+        print("Ingestion complete!")
+
+if __name__ == "__main__":
+    main()
+</code></pre>
+        </section>
+
+        <section class="quiz-container">
+            <h2>Checkpoint Quiz</h2>
+            <p><strong>Question:</strong> What does <code>subparsers.required = True</code> do in the code above?</p>
+            
+            <button class="quiz-option" onclick="selectOption(this, false)">
+                It ensures that every command requires a filepath.
+            </button>
+            <button class="quiz-option" onclick="selectOption(this, true)">
+                It throws an error and prints the help menu if the user just types `python cli.py` without specifying 'ask' or 'ingest'.
+            </button>
+            <button class="quiz-option" onclick="selectOption(this, false)">
+                It forces `argparse` to validate the file path exists before running.
+            </button>
+            
+            <div id="quiz-feedback" style="margin-top: 1rem; font-weight: bold;"></div>
+        </section>
+
+        <section>
+            <h2>Interactive Exercise</h2>
+            <p>Time to test your new CLI!</p>
+            <ol>
+                <li>Run the help command to see the auto-generated documentation:
+                    <pre><code>python cli.py --help</code></pre>
+                </li>
+                <li>Run an ingestion command:
+                    <pre><code>python cli.py ingest data/ai_engineering_rag.pdf</code></pre>
+                </li>
+                <li>Ask the agent a question:
+                    <pre><code>python cli.py ask "According to my notes, what is an agent?"</code></pre>
+                </li>
+            </ol>
+        </section>
+
+        <section>
+            <h2>Primary Source Recommendation</h2>
+            <p>Read the official <a href="https://docs.python.org/3/library/argparse.html#sub-commands" target="_blank">argparse documentation on sub-commands</a> to see how to add more complex arguments, like optional flags (e.g. <code>--verbose</code>).</p>
+        </section>
+    </main>
+
+    <footer>
+        <p>Give the new CLI a spin! Once you've successfully run both commands through <code>cli.py</code>, let me know.</p>
+        <p><a href="0005-writing-and-linking-notes.html">&larr; Lesson 5</a></p>
+    </footer>
+
+    <script>
+        function selectOption(button, isCorrect) {
+            const options = document.querySelectorAll('.quiz-option');
+            options.forEach(opt => {
+                opt.classList.remove('correct', 'incorrect');
+                opt.disabled = true;
+            });
+
+            const feedback = document.getElementById('quiz-feedback');
+            if (isCorrect) {
+                button.classList.add('correct');
+                feedback.innerHTML = "🎉 Correct! Without it, running `python cli.py` might just exit silently. It enforces that a subcommand is chosen.";
+                feedback.style.color = "var(--success-color)";
+            } else {
+                button.classList.add('incorrect');
+                feedback.innerHTML = "❌ Try again! (Hint: Look at the `dest=\"command\"` variable we set on the subparser).";
+                feedback.style.color = "var(--warning-color)";
+                
+                setTimeout(() => {
+                    options.forEach(opt => opt.disabled = false);
+                }, 1000);
+            }
+        }
+    </script>
+</body>
+</html>

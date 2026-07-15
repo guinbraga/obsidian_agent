@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 5: Writing and Linking Notes</title>
+    <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+    <header>
+        <p class="meta">OBSIDIAN AGENT COURSE &bull; LESSON 5</p>
+        <h1>Writing and Linking Notes</h1>
+    </header>
+
+    <main>
+        <section>
+            <p>Spot on! Your summary of defensive programming was perfect. Now that our agent can <em>read</em> Obsidian notes, it's time to give it the power to <em>write</em> and <em>link</em> them.</p>
+            <p>In this lesson, we will create a tool to append content (and wiki-links) to an existing note, or create a new note if it doesn't exist.</p>
+        </section>
+
+        <section>
+            <h2>Writing with Pathlib</h2>
+            <p>Just as reading with `pathlib` was easy, writing is equally elegant. We can use the open method with append mode (<code>"a"</code>) to safely add content to a note.</p>
+            <pre><code class="language-python">file_path = VAULT_DIR / "MyNote.md"
+
+# Append content, creating the file if it doesn't exist
+with file_path.open("a", encoding="utf-8") as f:
+    f.write("\n\nThis is new content appended to the file!")
+</code></pre>
+        </section>
+
+        <section>
+            <h2>Step 1: The Append Tool</h2>
+            <p>Let's add a new tool to <code>obsidian_tools.py</code>. This tool will allow the LLM to write new insights into the vault and link to existing notes.</p>
+            <p>Add the following code below your <code>read_obsidian_note</code> tool:</p>
+
+<pre><code class="language-python">@tool
+def append_obsidian_note(note_name: str, content: str) -> str:
+    """Appends content to a local Obsidian note by its name. 
+    If the note does not exist, it will be created.
+    Do not include the .md extension in the note_name.
+    To link to another note, use standard Obsidian wiki-link syntax in the content (e.g., [[Note Name]] or [[Note Name|Alias]])."""
+    
+    clean_name = note_name.replace("[[", "").replace("]]", "").replace(".md", "")
+    file_path = VAULT_DIR / f"{clean_name}.md"
+    
+    # We use 'a' for append mode. It automatically creates the file if it doesn't exist.
+    with file_path.open("a", encoding="utf-8") as f:
+        # Add a couple of newlines before appending new content for readability
+        f.write(f"\n\n{content}")
+        
+    return f"Successfully appended content to '{clean_name}'."
+</code></pre>
+        </section>
+
+        <section>
+            <h2>Step 2: Testing the Agent's Linking Ability</h2>
+            <p>Now we want to see if the LLM understands how to use both tools together to generate wiki-links. Let's update your <code>run_react_agent.py</code> to include both tools.</p>
+            <ol>
+                <li>In <code>run_react_agent.py</code>, update your imports:
+<pre><code class="language-python"># Import the obsidian tools
+from obsidian_tools import read_obsidian_note, append_obsidian_note
+</code></pre>
+                </li>
+                <li>Bind the tools to the LLM (you can remove <code>search_textbook</code> for now to keep things simple):
+<pre><code class="language-python">tools = [read_obsidian_note, append_obsidian_note, DuckDuckGoSearchRun()]
+llm_with_tools = llm.bind_tools(tools)
+</code></pre>
+                </li>
+                <li>Change your query to challenge the agent to read, search, and write:
+<pre><code class="language-python">query = (
+    "Read the 'Agents' note in my Obsidian vault. "
+    "Then, search the web for the definition of 'Agentic RAG'. "
+    "Finally, append a brief summary of Agentic RAG to the 'Agents' note, "
+    "and include a wiki-link to a new note called 'RAG Concepts'."
+)
+</code></pre>
+                </li>
+            </ol>
+        </section>
+
+        <section class="quiz-container">
+            <h2>Checkpoint Quiz</h2>
+            <p><strong>Question:</strong> When the agent is prompted to include a wiki-link like <code>[[RAG Concepts]]</code>, does it need to use the <code>append_obsidian_note</code> tool twice (once for 'Agents', once for 'RAG Concepts')?</p>
+            
+            <button class="quiz-option" onclick="selectOption(this, false)">
+                Yes, because it must create the 'RAG Concepts' file before linking to it.
+            </button>
+            <button class="quiz-option" onclick="selectOption(this, true)">
+                No, it only needs to append the text `[[RAG Concepts]]` to the 'Agents' note. Obsidian will handle the link even if the target file doesn't exist yet.
+            </button>
+            <button class="quiz-option" onclick="selectOption(this, false)">
+                No, because LangGraph automatically handles linking behind the scenes.
+            </button>
+            
+            <div id="quiz-feedback" style="margin-top: 1rem; font-weight: bold;"></div>
+        </section>
+
+        <section>
+            <h2>Interactive Exercise</h2>
+            <p>Run your updated <code>run_react_agent.py</code> script.</p>
+            <pre><code>python run_react_agent.py</code></pre>
+            <p>Once it completes, check your <code>vault/Agents.md</code> file. Did the agent successfully append the information and format the wiki-link correctly?</p>
+        </section>
+
+        <section>
+            <h2>Primary Source Recommendation</h2>
+            <p>Read about <a href="https://help.obsidian.md/Linking+notes+and+files/Internal+links" target="_blank">Internal Links in Obsidian</a> to understand how wiki-links work, including Aliases and linking to specific headings.</p>
+        </section>
+    </main>
+
+    <footer>
+        <p>Run the test script and let me know if the agent successfully added the content and wiki-link to your vault!</p>
+        <p><a href="0004-obsidian-local-tools.html">&larr; Lesson 4</a></p>
+    </footer>
+
+    <script>
+        function selectOption(button, isCorrect) {
+            const options = document.querySelectorAll('.quiz-option');
+            options.forEach(opt => {
+                opt.classList.remove('correct', 'incorrect');
+                opt.disabled = true;
+            });
+
+            const feedback = document.getElementById('quiz-feedback');
+            if (isCorrect) {
+                button.classList.add('correct');
+                feedback.innerHTML = "🎉 Correct! One of the best features of Obsidian is that you can link to files that don't exist yet. The agent just needs to write the raw text <code>[[RAG Concepts]]</code>.";
+                feedback.style.color = "var(--success-color)";
+            } else {
+                button.classList.add('incorrect');
+                feedback.innerHTML = "❌ Try again! (Hint: Think about how Obsidian treats unresolved links in the UI).";
+                feedback.style.color = "var(--warning-color)";
+                
+                setTimeout(() => {
+                    options.forEach(opt => opt.disabled = false);
+                }, 1000);
+            }
+        }
+    </script>
+</body>
+</html>

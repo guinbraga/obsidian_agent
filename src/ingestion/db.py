@@ -22,6 +22,7 @@ def get_session():
     engine = get_engine()
     Session = sessionmaker(bind=engine)
     session = Session()
+    session.execute(text("SET search_path TO obsidian_agent, public"))
     try:
         yield session
         session.commit()
