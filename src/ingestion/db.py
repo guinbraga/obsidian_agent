@@ -51,7 +51,7 @@ def generate_chunk_id(content: str, metadata: dict) -> uuid.UUID:
     return uuid.uuid5(CHUNK_NAMESPACE, unique_str)
 
 
-def insert_chunks(chunks, vectors):
+def insert_chunks(chunks, vectors, source_type):
     if not chunks:
         return
 
@@ -63,6 +63,7 @@ def insert_chunks(chunks, vectors):
             "content": chunk.page_content,
             "metadata_": chunk.metadata,
             "embedding": vector,
+            "source_type": source_type,
         })
 
     with get_session() as session:

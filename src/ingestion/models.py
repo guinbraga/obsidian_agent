@@ -18,3 +18,4 @@ class DocumentChunk(Base):
         "metadata", JSONB, nullable=False
     )  # mapped because it's a reserved word
     embedding = Column(Vector(384), nullable=False)
+    source_type = Column(String)
