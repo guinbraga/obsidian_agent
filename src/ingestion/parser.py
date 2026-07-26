@@ -1,5 +1,8 @@
 import re
-from langchain_huggingface import HuggingFaceEmbeddings
+import fitz
+
+import os
+from dotenv import load_dotenv
 
 from langchain_core.documents import Document
 from langchain_text_splitters import (
@@ -8,6 +11,10 @@ from langchain_text_splitters import (
 )
 from llama_cloud import LlamaCloud
 
+load_dotenv()
+
+llama_api_key = os.getenv("LLAMA_CLOUD_API_KEY")
+
 
 def clean_pdf_markdown(text: str) -> str:
     text = re.sub(r"(\w+)[-\u2010]+\s+(\w+)", r"\1\2", text)
@@ -15,8 +22,9 @@ def clean_pdf_markdown(text: str) -> str:
     return text
 
 
-def parse_textbook(file_path: str) -> list[Document]:
-    client = LlamaCloud()
+def parse_textbook_llama(file_path: str) -> list[Document]:
+    client = LlamaCloud(api_key=llama_api_key)
+    print("Parsing file with LlamaCloud...")
     file = client.files.create(file=file_path, purpose="parse")
     parsed_file = client.parsing.parse(
         file_id=file.id, tier="agentic", version="latest", expand=["markdown"]
@@ -35,16 +43,34 @@ def parse_textbook(file_path: str) -> list[Document]:
         chunk_size=1500, chunk_overlap=150, separators=["\n\n", "\n", " ", ""]
     )
     final_chunks = recursive_splitter.split_documents(document_chunks)
+
+    import os
+
+    source_filename = os.path.basename(file_path)
+    for chunk in final_chunks:
+        chunk.metadata["source"] = source_filename
+
     return final_chunks
 
+def parse_textbook_pymupdf(file_path: str):
+    """
+    Extracts text from a PDF and chunks it for the vector database.
+    Uses PyMuPDF, which is a cheaper and cost-efficient alternative to LlamaCloud.
+    """
+    print(f"Extracting text locally using PyMuPDF from {file_path}...")
 
-def create_embeddings(chunks: list[Document]):
-    embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
-    )
-    texts = [chunk.page_content for chunk in chunks]
-    print(f"Generating vectors for {len(texts)} chunks...")
-    vectors = embeddings.embed_documents(texts)
-    print(f"Succesfully generated {len(vectors)} vectors!")
-    print(f"length of first vector: {len(vectors[0])}")
-    return vectors
+    doc = fitz.open(file_path)
+    full_text = ""
+    for page in doc:
+        full_text += page.get_text() + "\n\n"
+
+    text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1500,
+            chunk_overlap=150,
+            length_function=len,
+            )
+
+    chunks = text_splitter.split_text(full_text)
+    print(f"Successfully created {len(chunks)} chunks!")
+
+    return chunks
