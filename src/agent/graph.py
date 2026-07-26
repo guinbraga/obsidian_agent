@@ -19,7 +19,14 @@ builder.add_conditional_edges(
 builder.add_edge("generate_content", END)
 
 graph = builder.compile()
-result = graph.invoke({"user_prompt": "Explain retrieval-augmented generation"})
-print(
-    f"State operations: {result['operations']}\n State draft_content: {result['draft_content']}"
-)
+
+prompts = [
+    "Make a note on RAG",
+    "Make a note on chairs",
+    "Write about the chi squared test.",
+]
+for prompt in prompts:
+    result = graph.invoke({"user_prompt": prompt})
+    print(
+        f"State operations: {result['operations']}\n State draft_content: {result['draft_content']}"
+    )

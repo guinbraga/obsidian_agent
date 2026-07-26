@@ -35,17 +35,39 @@ class VaultIndexer:
         index_state = self._load_index_state_file()
         md_chunker = MarkdownChunker()
         knowledge_base = KnowledgeBase()
-        embedder = load_embedder()
+        embedder = None
         for abs_note_path in self.vault_dir.rglob("*.md"):
             note_file = str(abs_note_path.relative_to(self.vault_dir))
             mtime = os.path.getmtime(abs_note_path)
-            if index_state[note_file] == mtime:
+            if index_state[note_file] != mtime:
+                if not embedder:
+                    embedder = load_embedder()
+
+                # Delete old chunks from this file
+                # TODO: Create KnowledgeBase method that deletes and inserts in the same commit
+                knowledge_base.delete_by_source(note_file, source_type="vault_note")
+
                 with open(abs_note_path, "r", encoding="utf-8") as note:
                     metadata = {"source": note_file}
                     chunks = md_chunker.split(note.read(), metadata)
                     note_embed = create_embeddings(chunks, embedder=embedder)
                     knowledge_base.insert(chunks, note_embed, source_type="vault_note")
-        print(index_state)
+
+                # Update index_state
+                index_state[note_file] = mtime
+
+        indexed_files = set(index_state.keys())
+        current_files = {
+            str(f.relative_to(self.vault_dir)) for f in self.vault_dir.rglob("*.md")
+        }
+        removed = indexed_files - current_files
+
+        for removed_file in removed:
+            knowledge_base.delete_by_source(removed_file, source_type="vault_note")
+            del index_state[removed_file]
+
+        with open(self.state_file, "w", encoding="utf-8") as index_state_file:
+            json.dump(index_state, index_state_file)
 
 
 if __name__ == "__main__":

@@ -13,5 +13,6 @@ def create_embeddings(
     print(f"Generating vectors for {len(texts)} chunks...")
     vectors = embedder.embed_documents(texts)
     print(f"Succesfully generated {len(vectors)} vectors!")
-    print(f"length of first vector: {len(vectors[0])}")
+    if vectors:
+        print(f"length of first vector: {len(vectors[0])}")
     return vectors
