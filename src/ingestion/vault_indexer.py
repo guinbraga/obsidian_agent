@@ -39,7 +39,7 @@ class VaultIndexer:
         for abs_note_path in self.vault_dir.rglob("*.md"):
             note_file = str(abs_note_path.relative_to(self.vault_dir))
             mtime = os.path.getmtime(abs_note_path)
-            if index_state[note_file] != mtime:
+            if index_state.get(note_file, -1) != mtime:
                 if not embedder:
                     embedder = load_embedder()
 
